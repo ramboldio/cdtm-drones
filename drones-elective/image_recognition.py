@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 import logging
-from time import sleep
 
 import libardrone.libardrone as libardrone
 
 import cv2
+from pip._vendor import requests
+
+W, H = 360, 640
 
 
 def main():
@@ -12,14 +14,15 @@ def main():
     drone.reset()
     drone.set_speed(0.1)
 
-    W, H = 360, 640
-
     try:
         running = True
 
         last_pressed_keys = []
 
         while running:
+            image = cv2.VideoCapture('~/Downloads/somfy.mp4')  # drone.get_image()
+            image = cv2.cvtColor(image, cv2.IMREAD_COLOR)  # COLOR_BGR2RGB
+
             pressed_key = cv2.waitKey(15) & 0xFF
 
             last_pressed_keys.append(pressed_key)
@@ -65,24 +68,12 @@ def main():
                     drone.takeoff()
 
                 elif very_last_pressed_key == ord('i'):
-                    HOST = 'localhost'
-                    PORT = '5000'
-
-                    # requests.post(url='%s:%s/models/images/classification/classify_one.json -XPOST -F job_id=20160809-164902-44b3 -F image_file=@/home/lukas/5.jpg' % (
-                    #     HOST,
-                    #     PORT
-                    # ),data=)
-
+                    bounding_rect = get_prediction(image)
+                    cv2.rectangle(image, bounding_rect, (0, 255, 0), 2, )
                 else:
                     print very_last_pressed_key
             else:
                 drone.hover()
-
-            image = drone.get_image()
-
-            # print image
-
-            image = cv2.cvtColor(image, cv2.IMREAD_COLOR)  # COLOR_BGR2RGB
 
             try:
                 nav_data = drone.get_navdata()
@@ -136,8 +127,27 @@ def main():
     print("Shut down.")
 
 
-def get_bouding_rect():
-    return (100, 100)
+def get_prediction(image):
+    HOST = 'localhost'
+    PORT = '5000'
+    JOB_ID = '20160809-164902-44b3'
+
+    cv2.imwrite("~/Downloads/test.jpg", image)
+
+    image_file = open('/Users/pasql/Downloads/9.jpg', 'rb')
+
+    r = requests.post('http://%s:%s/models/images/classification/classify_one.json' % (
+        HOST,
+        PORT,
+    ), data={
+        'job_id': JOB_ID,
+    }, files={
+        'image_file': image_file,
+    })
+
+    print r.text['predictions']['9']
+
+    return (H / 2 - 24, W / 2 - 24), (H / 2 + 26, W / 2 + 26)
 
 
 if __name__ == '__main__':
