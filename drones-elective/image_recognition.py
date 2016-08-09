@@ -12,12 +12,72 @@ def main():
     drone.reset()
     drone.set_speed(0.1)
 
+    W, H = 360, 640
+
     try:
         running = True
 
         last_pressed_keys = []
 
         while running:
+            pressed_key = cv2.waitKey(15) & 0xFF
+
+            last_pressed_keys.append(pressed_key)
+
+            if len(last_pressed_keys) > 15:
+                last_pressed_keys.pop(0)
+
+            key_up = all(last_pressed_key == 255 for last_pressed_key in last_pressed_keys)
+
+            print last_pressed_keys, key_up
+
+            very_last_pressed_key = None
+
+            if not key_up:
+                for last_pressed_key in last_pressed_keys:
+                    if last_pressed_key != 255:
+                        very_last_pressed_key = last_pressed_key
+
+                print very_last_pressed_key
+
+                if very_last_pressed_key == ord('q'):  # Q
+                    running = False
+                elif very_last_pressed_key == ord('w'):  # W
+                    drone.move_forward()
+                elif very_last_pressed_key == ord('s'):  # S
+                    drone.move_backward()
+                elif very_last_pressed_key == ord('a'):  # A
+                    drone.move_left()
+                elif very_last_pressed_key == ord('d'):  # D
+                    drone.move_right()
+
+                elif very_last_pressed_key == 0:  # Key Up
+                    drone.move_up()
+                elif very_last_pressed_key == 1:  # Key Down
+                    drone.move_down()
+                elif very_last_pressed_key == 2:  # Key Left
+                    drone.turn_left()
+                elif very_last_pressed_key == 3:  # Key Right
+                    drone.turn_right()
+                elif very_last_pressed_key == 32:  # Space
+                    drone.land()
+                elif very_last_pressed_key == 13:  # Enter
+                    drone.takeoff()
+
+                elif very_last_pressed_key == ord('i'):
+                    HOST = 'localhost'
+                    PORT = '5000'
+
+                    # requests.post(url='%s:%s/models/images/classification/classify_one.json -XPOST -F job_id=20160809-164902-44b3 -F image_file=@/home/lukas/5.jpg' % (
+                    #     HOST,
+                    #     PORT
+                    # ),data=)
+
+                else:
+                    print very_last_pressed_key
+            else:
+                drone.hover()
+
             image = drone.get_image()
 
             # print image
@@ -48,63 +108,21 @@ def main():
                 #     return
 
                 cv2.putText(image, '# Frames (?): %.0f' % nav_data['num_frames'], (5, 120), font, font_size, (255, 255, 255))
+                cv2.putText(image, 'Command: %s' % (very_last_pressed_key if very_last_pressed_key else '-',), (5, 135), font, font_size, (255, 255, 255))
 
             except Exception, e:
                 print 'Exception happened while trying to access nav data:'
                 logging.error(e, exc_info=True)
 
-            cv2.rectangle(image, (320 - 25, 160 - 25), (320 + 25, 160 + 25), (0, 0, 255), 4, )
+            cv2.rectangle(image, (H / 2 - 25, W / 2 - 25), (H / 2 + 25, W / 2 + 25), (0, 255, 0), 2, )
 
             # cv2.blur(image, (100, 100), (-1, -1))
             # mage = cv2.bilateralFilter(image, 9, 75, 75)
 
             cv2.imshow('Live Drone Cam (Jeronimo)', image)
 
-            pressed_key = cv2.waitKey(15) & 0xFF
-
-            print pressed_key
-
-            last_pressed_keys.append(pressed_key)
-            if len(last_pressed_keys) > 10:
-                last_pressed_keys.pop(0)
-
-            # last_pressed_key = None
-            # for last_pressed_key in last_pressed_keys.extend()
-
-            key_up = all(last_pressed_key == 255 for last_pressed_key in last_pressed_keys)
-
-            if not key_up:
-                if pressed_key == ord('q'):  # Q
-                    running = False
-                elif pressed_key == ord('w'):  # W
-                    drone.move_forward()
-                elif pressed_key == ord('s'):  # S
-                    drone.move_backward()
-                elif pressed_key == ord('a'):  # A
-                    drone.move_left()
-                elif pressed_key == ord('d'):  # D
-                    drone.move_right()
-
-                elif pressed_key == 0:  # Key Up
-                    drone.move_up()
-                elif pressed_key == 1:  # Key Down
-                    drone.move_down()
-                elif pressed_key == 2:  # Key Left
-                    drone.turn_left()
-                elif pressed_key == 3:  # Key Right
-                    drone.turn_right()
-                elif pressed_key == 32:  # Space
-                    drone.land()
-                elif pressed_key == 13:  # Enter
-                    drone.takeoff()
-
-                else:
-                    print pressed_key
-            else:
-                drone.hover()
-
-                # sleep(0.01)
-                # drone.hover()
+            # sleep(0.01)
+            # drone.hover()
 
     except Exception, e:
         print 'Exception happened in main while loop:'
@@ -116,6 +134,10 @@ def main():
     drone.reset()
     drone.halt()
     print("Shut down.")
+
+
+def get_bouding_rect():
+    return (100, 100)
 
 
 if __name__ == '__main__':
