@@ -134,7 +134,7 @@ def get_prediction(image):
 
     cv2.imwrite('/Users/pasql/Downloads/test.jpg', image)
 
-    image_file = open('/Users/pasql/Downloads/9.jpg', 'rb')
+    image_file = open('/Users/pasql/Downloads/test.jpg', 'rb')
 
     r = requests.post('http://%s:%s/models/images/classification/classify_one.json' % (
         HOST,
