@@ -20,8 +20,8 @@ def main():
         last_pressed_keys = []
 
         while running:
-            image = cv2.VideoCapture('~/Downloads/somfy.mp4')  # drone.get_image()
-            image = cv2.cvtColor(image, cv2.IMREAD_COLOR)  # COLOR_BGR2RGB
+            image = drone.get_image()
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # COLOR_BGR2RGB
 
             pressed_key = cv2.waitKey(15) & 0xFF
 
@@ -132,7 +132,7 @@ def get_prediction(image):
     PORT = '5000'
     JOB_ID = '20160809-164902-44b3'
 
-    cv2.imwrite("~/Downloads/test.jpg", image)
+    cv2.imwrite('/Users/pasql/Downloads/test.jpg', image)
 
     image_file = open('/Users/pasql/Downloads/9.jpg', 'rb')
 
