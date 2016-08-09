@@ -128,13 +128,16 @@ def main():
 
 
 def get_prediction(image):
+
+    print "start request.."
+
     HOST = 'localhost'
     PORT = '5000'
     JOB_ID = '20160809-164902-44b3'
 
-    cv2.imwrite('/Users/pasql/Downloads/test.jpg', image)
+    cv2.imwrite('tmp/DroneView.jpg', image)
 
-    image_file = open('/Users/pasql/Downloads/9.jpg', 'rb')
+    image_file = open('tmp/DroneView.jpg', 'rb')
 
     r = requests.post('http://%s:%s/models/images/classification/classify_one.json' % (
         HOST,
