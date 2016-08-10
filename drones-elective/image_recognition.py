@@ -7,8 +7,8 @@ import cv2
 
 W, H = 360, 640
 
-K_P = 0.1
-X_D = 1000
+K_P = 1
+X_D = 500
 
 
 def main():
@@ -18,6 +18,8 @@ def main():
 
     try:
         running = True
+
+        should_hold_altitude = False
 
         last_pressed_keys = []
 
@@ -32,33 +34,10 @@ def main():
             lower_red_1 = np.array([0, 50, 50])
             upper_red_1 = np.array([5, 255, 255])
 
-            # lower_red_2 = np.array([160, 50, 50])
-            # upper_red_2 = np.array([179, 255, 255])
-
             image = cv2.inRange(image, lower_red_1, upper_red_1)
 
             image = cv2.medianBlur(image, 15)
-            # image = cv2.inRange(image, lower_red_2, upper_red_2)
-            #
-            # image = cv2.addWeighted(mask1, 1.0, mask2, 1.0, 0.0)
 
-            # image = cv2.GaussianBlur(image, (9, 9), 2)
-
-            # lower_blue = np.array([50, 5, 5])
-            # upper_blue = np.array([190, 255, 255])
-            #
-            # image = cv2.inRange(image, lower_blue, upper_blue)
-
-            # image = cv2.GaussianBlur(image, (9, 9), 2)
-            # cv::GaussianBlur(red_hue_image, red_hue_image, cv::Size(9, 9), 2, 2);
-
-            # Bitwise-AND mask and original image
-            # image = cv2.bitw(image, image, mask=mask1)
-            # image = cv2.bitwise_and(image, image, mask=mask1)
-
-            # img_hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-
-            # gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             contours, hierarchy = cv2.findContours(image.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
             biggest_contour = None
@@ -74,29 +53,7 @@ def main():
                 x, y, w, h = cv2.boundingRect(biggest_contour)
                 cv2.rectangle(image_real_shit, (x, y), (x + w, y + h), (200, 0, 0), 2)
 
-            # img_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-            #
-            # # lower mask (0-10)
-            # lower_red = np.array([0, 50, 50])
-            # upper_red = np.array([10, 255, 255])
-            # mask0 = cv2.inRange(img_hsv, lower_red, upper_red)
-            #
-            # # upper mask (170-180)
-            # lower_red = np.array([170, 50, 50])
-            # upper_red = np.array([180, 255, 255])
-            # mask1 = cv2.inRange(img_hsv, lower_red, upper_red)
-            #
-            # # join my masks
-            # mask = mask0 + mask1
-            #
-            # # set my output img to zero everywhere except my mask
-            # # image = image.copy()
-            # image[np.where(mask == 0)] = 0
-            #
-            # # or your HSV image, which I *believe* is what you want
-            # output_hsv = img_hsv.copy()
-            # output_hsv[np.where(mask == 0)] = 0
-
+            # Key Press Events
             pressed_key = cv2.waitKey(15) & 0xFF
 
             last_pressed_keys.append(pressed_key)
@@ -105,8 +62,6 @@ def main():
                 last_pressed_keys.pop(0)
 
             key_up = all(last_pressed_key == 255 for last_pressed_key in last_pressed_keys)
-
-            # print last_pressed_keys, key_up
 
             very_last_pressed_key = None
 
@@ -143,20 +98,28 @@ def main():
 
                 elif very_last_pressed_key == ord('i'):
                     bounding_rect_start, bounding_rect_end = get_prediction(image)
+
+                elif very_last_pressed_key == ord('v'):
+                    should_hold_altitude = True
+
+                elif very_last_pressed_key == ord('n'):
+                    should_hold_altitude = False
+
                 elif very_last_pressed_key == ord('r'):
                     drone.reset()
+
+                elif very_last_pressed_key == ord('h'):
+                    drone.hover()
                 else:
                     print very_last_pressed_key
             else:
-                applyZVelocity(drone, 0)
+                pass
+                #
 
             try:
                 nav_data = drone.get_navdata()
 
                 nav_data = nav_data[0]
-
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                font_size = 0.5
 
                 ctrl_state = nav_data['ctrl_state']
                 phi = nav_data['phi']
@@ -168,6 +131,9 @@ def main():
                 vz = nav_data['vz']
                 battery = nav_data['battery']
                 num_frames = nav_data['num_frames']
+
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_size = 0.5
 
                 cv2.putText(image_real_shit, 'State: %s' % ctrl_state, (5, 15), font, font_size, (255, 255, 255))
 
@@ -182,9 +148,19 @@ def main():
 
                 cv2.putText(image_real_shit, '# Frames (?): %.0f' % num_frames, (5, 120), font, font_size, (255, 255, 255))
                 cv2.putText(image_real_shit, 'Command: %s' % (very_last_pressed_key if very_last_pressed_key else '-',), (5, 135), font, font_size, (255, 255, 255))
+                cv2.putText(image_real_shit, 'Should hold altitude: %s' % should_hold_altitude, (5, 150), font, font_size, (255, 255, 255))
 
-                # = 0.1 * (1000 - ...)
                 u = K_P * (X_D - altitude)
+
+                if should_hold_altitude and key_up:
+                    # =   1 * (500 - ...)
+
+                    if u > 0:
+                        drone.move_up()
+                    else:
+                        drone.move_down()
+
+                        # apply_z_velocity(drone, 1)
 
                 print nav_data['altitude'], u
 
@@ -239,12 +215,13 @@ def get_prediction(image):
     return (H / 2 - 24, W / 2 - 24), (H / 2 + 26, W / 2 + 26)
 
 
-def applyZVelocity(drone, v_dest):
+def apply_z_velocity(drone, v_dest):
     if abs(v_dest) < 0.1:
         drone.hover()
         return
 
     drone.set_speed(abs(v_dest))
+
     if v_dest >= 0:
         drone.moveDown()
     else:
