@@ -4,7 +4,7 @@ import time
 
 import cv2
 import numpy as np
-from libardrone.libardrone import at_pcmd
+from libardrone.libardrone import at_pcmd, ARDrone2
 
 import constants
 from drone_wrapper import ARDroneWrapper
@@ -40,7 +40,9 @@ def main():
         while running:
             drone_camera_image = drone.get_image()
 
-            drone_camera_image_as_rgb = cv2.cvtColor(drone_camera_image, cv2.COLOR_BGR2RGB)
+            print drone_camera_image
+
+            drone_camera_image_as_rgb = cv2.cvtColor(drone_camera_image.copy(), cv2.COLOR_BGR2RGB)
 
             # TODO: DO IN OWN CLASS
             # Find hat in camera view
@@ -128,7 +130,7 @@ def main():
 
             if object_center:
                 # draw point in viewport
-                cv2.circle(drone_camera_image_as_rgb, object_center, 5.0, (255, 0, 0), 3, 0)
+                # cv2.circle(drone_camera_image_as_rgb, object_center, 5.0, (255, 0, 0), 3, 0)
 
                 object_center_delta_z = H / 2 - object_center[1]
 
@@ -148,7 +150,7 @@ def main():
             if should_hold_altitude and key_up:
                 apply_z_velocity(drone, u, vz)  # max(min(1.0, u / 1000.0), -1.0))
 
-            cv2.circle(drone_camera_image_as_rgb, (W / 2, H / 2), 25, (0, 255, 0), 2, )
+            # cv2.circle(drone_camera_image_as_rgb, (W / 2, H / 2), 25, (0, 255, 0), 2, )
 
             cv2.imshow('Live Drone Cam (Jeronimo)', drone_camera_image_as_rgb)
 
