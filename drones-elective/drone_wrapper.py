@@ -1,11 +1,11 @@
-from libardrone.libardrone import ARDrone2
+from libardrone.libardrone import ARDrone2, ARDrone
 
 import constants
 
 
 class ARDroneWrapper(ARDrone2):
     def __init__(self):
-        super(ARDrone2, self).__init__()
+        ARDrone2.__init__(self, False)
 
         self.should_hold_altitude = False
 

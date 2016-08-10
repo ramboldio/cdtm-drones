@@ -14,11 +14,11 @@ def main():
     # Constants
     W, H = 640, 360
 
-    K_P = 1.2
+    K_P = 0.6
     K_D = 0.6
     K_I = 0.02
 
-    X_D = 1000
+    X_D = 1000.0
 
     running = True
     should_hold_altitude = False
@@ -40,8 +40,6 @@ def main():
         while running:
             drone_camera_image = drone.get_image()
 
-            print drone_camera_image
-
             drone_camera_image_as_rgb = cv2.cvtColor(drone_camera_image.copy(), cv2.COLOR_BGR2RGB)
 
             # TODO: DO IN OWN CLASS
@@ -51,7 +49,7 @@ def main():
                 last_hat_time = current_millis()
 
             # Key Press Events
-            pressed_key = cv2.waitKey(15) & 0xFF
+            pressed_key = cv2.waitKey(2) & 0xFF
 
             last_pressed_keys.append(pressed_key)
 
@@ -112,6 +110,7 @@ def main():
                 else:
                     print very_last_pressed_key
 
+            # Update Altitude & Calc vz
             alt.append(drone.altitude)
             ts_alt.append(current_millis() / 1000.0)
 
@@ -123,34 +122,47 @@ def main():
             else:
                 vz = 0.0
 
+            if object_center:
+                object_center_delta_z = H / 2 - object_center[1]
+
+                if abs(object_center_delta_z) > 25:
+                    X_D = max(300, min(2000, drone.altitude + object_center_delta_z * 5))  # TODO: make factor 5 dependent on distance / size of entire
+                    print 'do something different:', object_center_delta_z
+
+            elif (current_millis() - last_hat_time) > 7000:
+                X_D = constants.DRONE_DEFAULT_ALTITUDE
+
+            e_int += (X_D - drone.altitude) * (ts_alt[1] - ts_alt[0])
+            e_int = max(e_int, 200)
+
+            u = K_P * (X_D - drone.altitude) + K_D * (0 - vz) + K_I * e_int
+
+            print drone.altitude, X_D, u
+
+            if should_hold_altitude and key_up:
+                delta = X_D - drone.altitude
+
+                speed = float(delta) / float(X_D)
+
+                print '>', X_D, drone.altitude, delta, speed
+
+                if abs(X_D - drone.altitude) < 50:
+                    drone.hover()
+                else:
+                    drone.at(at_pcmd, True, 0, 0, speed, 0)
+
+                    # apply_z_velocity(drone, u)  # max(min(1.0, u / 1000.0), -1.0))
+
             show_on_image(drone_camera_image_as_rgb, drone.ctrl_state, drone.phi, drone.psi, drone.theta, drone.altitude, drone.vx, drone.vy, drone.vz, drone.battery, drone.num_frames)
 
             show_text(drone_camera_image_as_rgb, 'Command: %s' % (very_last_pressed_key if very_last_pressed_key else '-',), (5, 135))
             show_text(drone_camera_image_as_rgb, 'Should hold altitude: %s' % should_hold_altitude, (5, 150))
 
+            cv2.circle(drone_camera_image_as_rgb, (W / 2, H / 2), 25, (0, 255, 0), 2, )
+
             if object_center:
                 # draw point in viewport
-                # cv2.circle(drone_camera_image_as_rgb, object_center, 5.0, (255, 0, 0), 3, 0)
-
-                object_center_delta_z = H / 2 - object_center[1]
-
-                if abs(object_center_delta_z) > 25:
-                    X_D = drone.altitude + object_center_delta_z * 5  # TODO: make factor 5 dependent on distance / size of entire
-
-            elif (current_millis() - last_hat_time) > 10000:
-                X_D = constants.DRONE_DEFAULT_ALTITUDE
-
-            X_D = max(300, X_D)
-            e_int += (X_D - drone.altitude) * (ts_alt[1] - ts_alt[0])
-            e_int = max(e_int, 200)
-            u = K_P * (X_D - drone.altitude) + K_D * (0 - vz) + K_I * e_int
-
-            print drone.altitude, X_D, K_P, K_D, u
-
-            if should_hold_altitude and key_up:
-                apply_z_velocity(drone, u, vz)  # max(min(1.0, u / 1000.0), -1.0))
-
-            # cv2.circle(drone_camera_image_as_rgb, (W / 2, H / 2), 25, (0, 255, 0), 2, )
+                cv2.circle(drone_camera_image_as_rgb, object_center, 5, (255, 0, 0), 3, 0)
 
             cv2.imshow('Live Drone Cam (Jeronimo)', drone_camera_image_as_rgb)
 
@@ -185,8 +197,11 @@ def show_text(image, text, pt, font=constants.FONT, font_size=constants.FONT_SIZ
     cv2.putText(image, text, pt, font, font_size, color)
 
 
-def apply_z_velocity(drone, u, vz):
-    drone.at(at_pcmd, True, 0, 0, min(max(u / 100.0, -1.0), 1.0), 0)
+def apply_z_velocity(drone, u):
+    if abs(u) < 30:
+        drone.hover()
+    else:
+        drone.at(at_pcmd, True, 0, 0, min(max(u / 100.0, -1.0), 1.0), 0)
 
 
 def find_object(image):
@@ -197,6 +212,8 @@ def find_object(image):
     # Convert to HSV in order to filter by color
     image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
 
+    image = cv2.medianBlur(image, 3)
+
     # Filter by color red
     lower_red_1 = np.array([0, 50, 50])
     upper_red_1 = np.array([5, 255, 255])
@@ -204,7 +221,8 @@ def find_object(image):
     image = cv2.inRange(image, lower_red_1, upper_red_1)
 
     # Put on median blur to reduce noise
-    image = cv2.medianBlur(image, 15)
+    # image = cv2.GaussianBlur(image, (15, 15), 2)
+    image = cv2.medianBlur(image, 11)
 
     # Find contours and decide if hat is one of them
     contours, hierarchy = cv2.findContours(image.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
@@ -218,15 +236,19 @@ def find_object(image):
 
         if w * h > biggest_contour_size:
             biggest_contour = contour
+            biggest_contour_size = w * h
 
     # 2) Check if biggest contour is hat
     if biggest_contour is not None:
         x, y, w, h = cv2.boundingRect(biggest_contour)
 
-        if w > 40 and h > 40:
+        if w * h > 1000:
+            print w, h
             found_hat = True
             hat_bounding_box = cv2.boundingRect(biggest_contour)
             hat_center = (x + (w / 2), (y + (h / 2)))
+
+    cv2.imshow("masked", image)
 
     return found_hat, hat_bounding_box, hat_center
 
