@@ -2,8 +2,10 @@
 import logging
 
 import libardrone.libardrone as libardrone
+import math
 import numpy as np
 import cv2
+from libardrone.libardrone import ARDrone
 
 W, H = 360, 640
 
@@ -71,6 +73,8 @@ def main():
                         very_last_pressed_key = last_pressed_key
 
                 # print very_last_pressed_key
+
+                drone.set_speed(0.3)
 
                 if very_last_pressed_key == ord('q'):  # Q
                     running = False
@@ -144,7 +148,7 @@ def main():
                 cv2.putText(image_real_shit, 'Altitude: %.0f' % altitude, (5, 75), font, font_size, (255, 255, 255))
                 cv2.putText(image_real_shit, 'vx/vy/vz: %.3f/%.3f/%.3f' % (vx, vy, vz), (5, 90), font, font_size, (255, 255, 255))
 
-                cv2.putText(image_real_shit, 'Battery: %.0f%%' % battery, (5, 105), font, font_size, (255, 255, 255))
+                cv2.putText(image_real_shit, 'Battery: %.0f%%' % battery, (5, 105), font, font_size, (255, 255, 255) if battery > 0.2 else (0, 0, 255))
 
                 cv2.putText(image_real_shit, '# Frames (?): %.0f' % num_frames, (5, 120), font, font_size, (255, 255, 255))
                 cv2.putText(image_real_shit, 'Command: %s' % (very_last_pressed_key if very_last_pressed_key else '-',), (5, 135), font, font_size, (255, 255, 255))
@@ -152,17 +156,12 @@ def main():
 
                 u = K_P * (X_D - altitude)
 
+                print nav_data['altitude'], u
+
                 if should_hold_altitude and key_up:
                     # =   1 * (500 - ...)
 
-                    if u > 0:
-                        drone.move_up()
-                    else:
-                        drone.move_down()
-
-                        # apply_z_velocity(drone, 1)
-
-                print nav_data['altitude'], u
+                    apply_z_velocity(drone, u)  # max(min(1.0, u / 1000.0), -1.0))
 
             except Exception, e:
                 print 'Exception happened while trying to access nav data:'
@@ -216,16 +215,17 @@ def get_prediction(image):
 
 
 def apply_z_velocity(drone, v_dest):
-    if abs(v_dest) < 0.1:
-        drone.hover()
-        return
+    print v_dest, math.copysign(0.2, v_dest)
 
-    drone.set_speed(abs(v_dest))
+    # if abs(v_dest) < 0.005:
+    #     return
 
-    if v_dest >= 0:
-        drone.moveDown()
-    else:
-        drone.moveUpd()
+    drone.at(drone.at_pcmd, True, 0, 0, math.copysign(0.2, v_dest), 0)
+
+    # if v_dest > 0:
+    #     drone.move_up()
+    # elif v_dest < 0:
+    #     drone.move_down()
 
 
 if __name__ == '__main__':
