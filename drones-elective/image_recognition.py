@@ -1,15 +1,19 @@
 #!/usr/bin/env python
 import logging
-
-import libardrone.libardrone as libardrone
 import math
-import numpy as np
+import time
+
 import cv2
-from libardrone.libardrone import ARDrone
+import libardrone.libardrone as libardrone
+import numpy as np
+from libardrone.libardrone import at_pcmd
 
 W, H = 360, 640
 
 K_P = 1
+K_D = 1
+K_I = 0.02
+
 X_D = 500
 
 
@@ -26,6 +30,10 @@ def main():
         last_pressed_keys = []
 
         bounding_rect_start, bounding_rect_end = ((160, 320), (160, 320))
+
+        alt = [0]
+        ts_alt = [current_millis() / 1000.0]
+        e_int = 0
 
         while running:
             image = drone.get_image()
@@ -72,9 +80,7 @@ def main():
                     if last_pressed_key != 255:
                         very_last_pressed_key = last_pressed_key
 
-                # print very_last_pressed_key
-
-                drone.set_speed(0.3)
+                drone.set_speed(0.15)
 
                 if very_last_pressed_key == ord('q'):  # Q
                     running = False
@@ -116,56 +122,57 @@ def main():
                     drone.hover()
                 else:
                     print very_last_pressed_key
-            else:
-                pass
-                #
 
-            try:
-                nav_data = drone.get_navdata()
+            nav_data = drone.get_navdata()
 
-                nav_data = nav_data[0]
+            nav_data = nav_data[0]
 
-                ctrl_state = nav_data['ctrl_state']
-                phi = nav_data['phi']
-                psi = nav_data['psi']
-                theta = nav_data['theta']
-                altitude = nav_data['altitude']
-                vx = nav_data['vx']
-                vy = nav_data['vy']
-                vz = nav_data['vz']
-                battery = nav_data['battery']
-                num_frames = nav_data['num_frames']
+            ctrl_state = nav_data['ctrl_state']
+            phi = nav_data['phi']
+            psi = nav_data['psi']
+            theta = nav_data['theta']
+            altitude = nav_data['altitude']
+            vx = nav_data['vx']
+            vy = nav_data['vy']
+            vz = nav_data['vz']
+            battery = nav_data['battery']
+            num_frames = nav_data['num_frames']
 
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                font_size = 0.5
+            alt.append(altitude)
+            ts_alt.append(current_millis() / 1000.0)
 
-                cv2.putText(image_real_shit, 'State: %s' % ctrl_state, (5, 15), font, font_size, (255, 255, 255))
+            if len(alt) > 2:
+                alt.pop(0)
+                ts_alt.pop(0)
 
-                cv2.putText(image_real_shit, 'Phi (+Roll Right/- Roll Left): %.0f' % phi, (5, 30), font, font_size, (255, 255, 255))
-                cv2.putText(image_real_shit, 'Psi (+Turn Right/- Turn Left): %.0f' % psi, (5, 45), font, font_size, (255, 255, 255))
-                cv2.putText(image_real_shit, 'Theta (+Up/-Down): %.0f' % theta, (5, 60), font, font_size, (255, 255, 255))
+                vz = float(alt[1] - alt[0]) / float(ts_alt[1] - ts_alt[0])
+                # print alt, ts_alt, ts_alt[1] - ts_alt[0], vz
 
-                cv2.putText(image_real_shit, 'Altitude: %.0f' % altitude, (5, 75), font, font_size, (255, 255, 255))
-                cv2.putText(image_real_shit, 'vx/vy/vz: %.3f/%.3f/%.3f' % (vx, vy, vz), (5, 90), font, font_size, (255, 255, 255))
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_size = 0.5
 
-                cv2.putText(image_real_shit, 'Battery: %.0f%%' % battery, (5, 105), font, font_size, (255, 255, 255) if battery > 0.2 else (0, 0, 255))
+            cv2.putText(image_real_shit, 'State: %s' % ctrl_state, (5, 15), font, font_size, (255, 255, 255))
 
-                cv2.putText(image_real_shit, '# Frames (?): %.0f' % num_frames, (5, 120), font, font_size, (255, 255, 255))
-                cv2.putText(image_real_shit, 'Command: %s' % (very_last_pressed_key if very_last_pressed_key else '-',), (5, 135), font, font_size, (255, 255, 255))
-                cv2.putText(image_real_shit, 'Should hold altitude: %s' % should_hold_altitude, (5, 150), font, font_size, (255, 255, 255))
+            cv2.putText(image_real_shit, 'Phi (+Roll Right/- Roll Left): %.0f' % phi, (5, 30), font, font_size, (255, 255, 255))
+            cv2.putText(image_real_shit, 'Psi (+Turn Right/- Turn Left): %.0f' % psi, (5, 45), font, font_size, (255, 255, 255))
+            cv2.putText(image_real_shit, 'Theta (+Up/-Down): %.0f' % theta, (5, 60), font, font_size, (255, 255, 255))
 
-                u = K_P * (X_D - altitude)
+            cv2.putText(image_real_shit, 'Altitude: %.0f' % altitude, (5, 75), font, font_size, (255, 255, 255))
+            cv2.putText(image_real_shit, 'vx/vy/vz: %.3f/%.3f/%.3f' % (vx, vy, vz), (5, 90), font, font_size, (255, 255, 255))
 
-                print nav_data['altitude'], u
+            cv2.putText(image_real_shit, 'Battery: %.0f%%' % battery, (5, 105), font, font_size, (255, 255, 255) if battery > 20 else (0, 0, 255))
 
-                if should_hold_altitude and key_up:
-                    # =   1 * (500 - ...)
+            cv2.putText(image_real_shit, '# Frames (?): %.0f' % num_frames, (5, 120), font, font_size, (255, 255, 255))
+            cv2.putText(image_real_shit, 'Command: %s' % (very_last_pressed_key if very_last_pressed_key else '-',), (5, 135), font, font_size, (255, 255, 255))
+            cv2.putText(image_real_shit, 'Should hold altitude: %s' % should_hold_altitude, (5, 150), font, font_size, (255, 255, 255))
 
-                    apply_z_velocity(drone, u)  # max(min(1.0, u / 1000.0), -1.0))
+            # e_int += (X_D - altitude) * (ts_alt[1] - ts_alt[0])
+            u = K_P * (X_D - altitude) + K_D * (0 - vz)  # + K_I * e_int
 
-            except Exception, e:
-                print 'Exception happened while trying to access nav data:'
-                logging.error(e, exc_info=True)
+            print altitude, alt[0], alt[1], alt[1] - alt[0], vz, u
+
+            if should_hold_altitude and key_up:
+                apply_z_velocity(drone, u, vz)  # max(min(1.0, u / 1000.0), -1.0))
 
             cv2.rectangle(image_real_shit, (H / 2 - 25, W / 2 - 25), (H / 2 + 25, W / 2 + 25), (0, 255, 0), 2, )
             cv2.rectangle(image_real_shit, bounding_rect_start, bounding_rect_end, (0, 255, 0), 2, )
@@ -182,6 +189,12 @@ def main():
     drone.reset()
     drone.halt()
     print("Shut down.")
+
+
+def apply_z_velocity(drone, u, vz):
+    # print v_dest, math.copysign(0.2, v_dest)
+
+    drone.at(at_pcmd, True, 0, 0, min(max(u / 100.0, -1.0), 1.0), 0)  # math.copysign( 0.1, u), 0)
 
 
 network_mutex = True
@@ -214,18 +227,8 @@ def get_prediction(image):
     return (H / 2 - 24, W / 2 - 24), (H / 2 + 26, W / 2 + 26)
 
 
-def apply_z_velocity(drone, v_dest):
-    print v_dest, math.copysign(0.2, v_dest)
-
-    # if abs(v_dest) < 0.005:
-    #     return
-
-    drone.at(drone.at_pcmd, True, 0, 0, math.copysign(0.2, v_dest), 0)
-
-    # if v_dest > 0:
-    #     drone.move_up()
-    # elif v_dest < 0:
-    #     drone.move_down()
+def current_millis():
+    return int(round(time.time() * 1000))
 
 
 if __name__ == '__main__':
