@@ -73,7 +73,7 @@ def main():
                 else:
                     print very_last_pressed_key
             else:
-                drone.hover()
+                applyZVelocity(drone, 0)
 
             try:
                 nav_data = drone.get_navdata()
@@ -151,6 +151,18 @@ def get_prediction(image):
     print r.text['predictions']['9']
 
     return (H / 2 - 24, W / 2 - 24), (H / 2 + 26, W / 2 + 26)
+
+
+def applyZVelocity(drone, v_dest):
+    if abs(v_dest) < 0.1:
+        drone.hover()
+        return
+
+    drone.set_speed(abs(v_dest))
+    if v_dest >= 0:
+        drone.moveDown()
+    else:
+        drone.moveUpd()
 
 
 if __name__ == '__main__':
