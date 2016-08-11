@@ -15,8 +15,8 @@ def main():
     # Constants
     W, H = 640, 360
 
-    K_P = 0.6
-    K_D = 0.6
+    K_P = 1.0
+    K_D = 0.0
     K_I = 0.02
 
     X_D = 1000.0
@@ -24,8 +24,8 @@ def main():
     W_D = 320
     H_D = 220
 
-    MAX_OFF_WIDTH_REL = 0.15
-    MAX_OFF_HEIGHT_REL = 0.15
+    MAX_OFF_WIDTH_REL = 0.10
+    MAX_OFF_HEIGHT_REL = 0.10
 
     speex_x_turn_factor = 0.2
 
@@ -46,6 +46,10 @@ def main():
     drone.setup()
 
     try:
+        object_center_delta_width_rel_old = 0.0
+        object_center_delta_height_rel_old = 0.0
+        object_bounding_box_delta_distance_old = 0.0
+
         while running:
             drone_camera_image = drone.get_image()
 
@@ -141,10 +145,12 @@ def main():
                 center_x, center_y = object_center
 
                 object_center_delta_width = W / 2 - center_x
-                object_center_delta_width_rel = float(object_center_delta_width) / float(W / 2)
+                object_center_delta_width_rel = float(object_center_delta_width) / float(W / 2) # + K_D * (0 - object_center_delta_width_rel_old)
+                # object_center_delta_width_rel_old = object_center_delta_width_rel
 
                 object_center_delta_height = H / 2 - center_y
-                object_center_delta_height_rel = float(object_center_delta_height) / float(H / 2)
+                object_center_delta_height_rel = float(object_center_delta_height) / float(H / 2) # + K_D * (0 - object_center_delta_height_rel_old)
+                # object_center_delta_height_rel_old = object_center_delta_height_rel
 
                 if abs(object_center_delta_height) > 25:
                     X_D = max(300, min(1500, drone.altitude + object_center_delta_height * 5))  # TODO: make factor 5 dependent on distance / size of entire
@@ -156,12 +162,13 @@ def main():
                 if abs(object_center_delta_height_rel) > MAX_OFF_HEIGHT_REL:
                     speed_z = object_center_delta_height_rel  # up , down
 
-                x, y, w, h = object_bounding_box
+                if not speed_x and not speed_z:
+                    x, y, w, h = object_bounding_box
 
-                # if float(w) / float(W) > 0.4:
-                #     speed_y = 0.03  # back, forth
-                # elif float(w) / float(W) < 0.275:
-                #     speed_y = -0.03  # back, forth
+                    object_bounding_box_delta_distance = float(h - H_D) / float(H_D)
+
+                    if abs(object_bounding_box_delta_distance) > 0.05:
+                        speed_y = min(1, max(-1, object_bounding_box_delta_distance))  # back, forth
 
             elif (current_millis() - last_hat_time) > 7000:
                 X_D = constants.DRONE_DEFAULT_ALTITUDE
@@ -171,22 +178,26 @@ def main():
 
             u = K_P * (X_D - drone.altitude) + K_D * (0 - vz) + K_I * e_int
 
-            if should_hold_altitude and key_up:
-                speed_x *= 0.2  # 0.5
-                speed_y *= 0.2  # 0.1
-                speed_z *= 0.2  # 0.3
+            if object_center and should_hold_altitude and key_up:
+                speed_x *= 0.2 * 1.0  # 0.5
+                speed_y *= 0.1 * 0.0  # 0.1
+                speed_z *= 0.2 * 1.0  # 0.3
 
-                if abs(speed_x) > 0.05:
-                    turn_right = math.copysign(0.1, speed_x)
+                speed_x = minmax(speed_x, -0.5, 0.5)
+                speed_y = minmax(speed_y, -0.5, 0.5)
+                speed_z = minmax(speed_z, -0.5, 0.5)
+
+                # if abs(speed_x) > 0.05:
+                #     turn_right = math.copysign(0.1, speed_x)
+                # else:
+                #     turn_right = 0.0
+
+                if any(speed != 0 for speed in (speed_x, speed_y, speed_z)):
+                    print speed_x, speed_y, speed_z, 0
+
+                    drone.at(at_pcmd, True, speed_x, speed_y, speed_z, 0)  # -0.05 * speed_x)
                 else:
-                    turn_right = 0.0
-
-                print speed_x, speed_y, speed_z, turn_right
-
-                if any(abs(speed) > 0.1 for speed in (speed_x, speed_y, speed_z)):
-                    # drone.at(at_pcmd, True, speed_x, speed_y, speed_z, turn_right)
-                    drone.at(at_pcmd, True, speed_x, speed_y, speed_z, turn_right)
-                else:
+                    print 'hover'
                     drone.hover()
 
             show_on_image(drone_camera_image_as_rgb, drone.ctrl_state, drone.phi, drone.psi, drone.theta, drone.altitude, drone.vx, drone.vy, drone.vz, drone.battery, drone.num_frames)
@@ -196,7 +207,11 @@ def main():
 
             cv2.rectangle(drone_camera_image_as_rgb, ((W - W_D) / 2, (H - H_D) / 2), ((W + W_D) / 2, (H + H_D) / 2), (0, 255, 0), 2)
 
-            cv2.rectangle(drone_camera_image_as_rgb, ((W * (1 - MAX_OFF_WIDTH_REL)) / 2, (H * (1 - MAX_OFF_HEIGHT_REL)) / 2), ((W * (1 - MAX_OFF_WIDTH_REL)) / 2, (H * (1 + MAX_OFF_HEIGHT_REL)) / 2), (0, 255, 255), 3)
+            cv2.rectangle(drone_camera_image_as_rgb,
+                          (int((W * (1 - MAX_OFF_WIDTH_REL)) / 2), int((H * (1 - MAX_OFF_HEIGHT_REL)) / 2)),
+                          (int((W * (1 + MAX_OFF_WIDTH_REL)) / 2), int((H * (1 + MAX_OFF_HEIGHT_REL)) / 2)),
+                          (0, 255, 255),
+                          3)
 
             # cv2.circle(drone_camera_image_as_rgb, (W / 2, H / 2), int(H * 0.2), (0, 255, 0), 2, )
 
