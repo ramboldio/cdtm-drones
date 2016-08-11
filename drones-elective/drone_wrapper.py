@@ -5,18 +5,28 @@ import constants
 
 class ARDroneWrapper(ARDrone2):
 
+    __camera_down_active = False
+
     def __init__(self):
         ARDrone2.__init__(self, False)
         self.should_hold_altitude = False
-        self.camera_down_active = False
 
     def setup(self):
         self.reset()
         self.set_speed(constants.DRONE_DEFAULT_SPEED)
+        # set front camera
+        self.__camera_down_active = False
+        self.set_camera_view(self.__camera_down_active)
 
     def apply_velocity(self, speed_x, speed_y, speed_z):
         if any(abs(speed) > 0.1 for speed in (speed_x, speed_y, speed_z)):
             self.at(at_pcmd, True, speed_x * 0.2, speed_y, speed_z, speed_x)
+        else:
+            self.hover()
+
+    def apply_velocity_down_cam(self, speed_x, speed_y, speed_z):
+        if any(abs(speed) > 0.1 for speed in (speed_x, speed_y, speed_z)):
+            self.at(at_pcmd, True, speed_x, speed_y, speed_z, 0)
         else:
             self.hover()
 
@@ -27,9 +37,9 @@ class ARDroneWrapper(ARDrone2):
             self.at(at_pcmd, True, 0, 0, min(max(u / 100.0, -1.0), 1.0), 0)
 
     def apply_active_cam(self, cam_down_dest):
-        if not self.cam_down_active == cam_down_dest:
-            self.cam_down_active = cam_down_dest
-            self.set_camera_view(self.cam_down_active)
+        if not self.__camera_down_active == cam_down_dest:
+            self.__camera_down_active = cam_down_dest
+            self.set_camera_view(self.__camera_down_active)
 
     @property
     def ctrl_state(self):
