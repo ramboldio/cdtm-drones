@@ -1,0 +1,40 @@
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>DHL</title>
+	<style>
+		body {
+			background-color: #fecb05;
+		}
+		img, .dashed{
+			position: absolute;
+			top: 0;
+			bottom: 0;
+			right: 0;
+			left: 0;
+			margin: auto;
+			height: 80%;
+		}
+		.dashed {
+			border: 5px dashed #D60411;
+			border-radius: 10px;
+			width: 80%;
+		}
+	</style>
+	<script>
+	document.addEventListener('click', function () {
+		       var e = document.getElementById('img');
+       if(e.style.display == 'block')
+          e.style.display = 'none';
+       else
+          e.style.display = 'block';
+
+});
+</script>
+	
+</head>
+<body>
+	<div class="dashed"></div>
+	<img id="img" src="present.png" alt="">
+</body>
+</html>
