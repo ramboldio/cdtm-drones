@@ -103,7 +103,7 @@ def main():
 
                 elif very_last_pressed_key == 32:  # Space
                     drone.land()
-                elif very_last_pressed_key == 13:  # Enter
+                elif very_last_pressed_key == 13 or very_last_pressed_key == 10:  # Enter
                     e_int = 0
                     drone.takeoff()
 
