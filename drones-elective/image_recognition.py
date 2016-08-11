@@ -3,6 +3,7 @@ import logging
 import time
 
 import cv2
+import math
 import numpy as np
 from libardrone.libardrone import at_pcmd, ARDrone2
 
@@ -19,6 +20,12 @@ def main():
     K_I = 0.02
 
     X_D = 1000.0
+
+    W_D = 320
+    H_D = 220
+
+    MAX_OFF_WIDTH_REL = 0.15
+    MAX_OFF_HEIGHT_REL = 0.15
 
     speex_x_turn_factor = 0.2
 
@@ -128,6 +135,8 @@ def main():
             speed_y = 0.0
             speed_z = 0.0
 
+            speed_turn_right = 0.0
+
             if object_center:
                 center_x, center_y = object_center
 
@@ -138,23 +147,21 @@ def main():
                 object_center_delta_height_rel = float(object_center_delta_height) / float(H / 2)
 
                 if abs(object_center_delta_height) > 25:
-                    X_D = max(300, min(2000, drone.altitude + object_center_delta_height * 5))  # TODO: make factor 5 dependent on distance / size of entire
+                    X_D = max(300, min(1500, drone.altitude + object_center_delta_height * 5))  # TODO: make factor 5 dependent on distance / size of entire
                     # print 'do something different:', object_center_delta_z
 
-                if abs(object_center_delta_width_rel) > 0.2:
+                if abs(object_center_delta_width_rel) > MAX_OFF_WIDTH_REL:
                     speed_x = - object_center_delta_width_rel  # right , left
 
-                if abs(object_center_delta_height_rel) > 0.2:
+                if abs(object_center_delta_height_rel) > MAX_OFF_HEIGHT_REL:
                     speed_z = object_center_delta_height_rel  # up , down
 
                 x, y, w, h = object_bounding_box
 
                 # if float(w) / float(W) > 0.4:
-                #     speed_y = 0.01  # back, forth
+                #     speed_y = 0.03  # back, forth
                 # elif float(w) / float(W) < 0.275:
-                #     speed_y = -0.01  # back, forth
-
-                # print w, W, float(w) / float(W), speed_y
+                #     speed_y = -0.03  # back, forth
 
             elif (current_millis() - last_hat_time) > 7000:
                 X_D = constants.DRONE_DEFAULT_ALTITUDE
@@ -164,33 +171,34 @@ def main():
 
             u = K_P * (X_D - drone.altitude) + K_D * (0 - vz) + K_I * e_int
 
-            # print drone.altitude, X_D, u
-
             if should_hold_altitude and key_up:
-                # print '>', X_D, drone.altitude, delta, speed
-                # if abs(X_D - drone.altitude) > 50:
-                #     delta = X_D - drone.altitude
-                #     speed_z = float(delta) / float(X_D)
+                speed_x *= 0.2  # 0.5
+                speed_y *= 0.2  # 0.1
+                speed_z *= 0.2  # 0.3
 
-                speed_x *= 0.5  # 0.5
-                speed_y *= 0.1  # 0.1
-                speed_z *= 0.3  # 0.3
+                if abs(speed_x) > 0.05:
+                    turn_right = math.copysign(0.1, speed_x)
+                else:
+                    turn_right = 0.0
 
-                print speed_x, speed_y, speed_z
+                print speed_x, speed_y, speed_z, turn_right
 
                 if any(abs(speed) > 0.1 for speed in (speed_x, speed_y, speed_z)):
-                    drone.at(at_pcmd, True, speed_x * 0.1, speed_y, speed_z, speed_x)
+                    # drone.at(at_pcmd, True, speed_x, speed_y, speed_z, turn_right)
+                    drone.at(at_pcmd, True, speed_x, speed_y, speed_z, turn_right)
                 else:
                     drone.hover()
-
-                    # apply_z_velocity(drone, u)  # max(min(1.0, u / 1000.0), -1.0))
 
             show_on_image(drone_camera_image_as_rgb, drone.ctrl_state, drone.phi, drone.psi, drone.theta, drone.altitude, drone.vx, drone.vy, drone.vz, drone.battery, drone.num_frames)
 
             show_text(drone_camera_image_as_rgb, 'Command: %s' % (very_last_pressed_key if very_last_pressed_key else '-',), (5, 135))
             show_text(drone_camera_image_as_rgb, 'Should hold altitude: %s' % should_hold_altitude, (5, 150))
 
-            cv2.circle(drone_camera_image_as_rgb, (W / 2, H / 2), int(H * 0.2), (0, 255, 0), 2, )
+            cv2.rectangle(drone_camera_image_as_rgb, ((W - W_D) / 2, (H - H_D) / 2), ((W + W_D) / 2, (H + H_D) / 2), (0, 255, 0), 2)
+
+            cv2.rectangle(drone_camera_image_as_rgb, ((W * (1 - MAX_OFF_WIDTH_REL)) / 2, (H * (1 - MAX_OFF_HEIGHT_REL)) / 2), ((W * (1 - MAX_OFF_WIDTH_REL)) / 2, (H * (1 + MAX_OFF_HEIGHT_REL)) / 2), (0, 255, 255), 3)
+
+            # cv2.circle(drone_camera_image_as_rgb, (W / 2, H / 2), int(H * 0.2), (0, 255, 0), 2, )
 
             if object_center:
                 # draw point in viewport
@@ -229,11 +237,12 @@ def show_text(image, text, pt, font=constants.FONT, font_size=constants.FONT_SIZ
     cv2.putText(image, text, pt, font, font_size, color)
 
 
-def apply_z_velocity(drone, u):
-    if abs(u) < 30:
-        drone.hover()
-    else:
-        drone.at(at_pcmd, True, 0, 0, min(max(u / 100.0, -1.0), 1.0), 0)
+#
+# def apply_z_velocity(drone, u):
+#     if abs(u) < 30:
+#         drone.hover()
+#     else:
+#         drone.at(at_pcmd, True, 0, 0, min(max(u / 100.0, -1.0), 1.0), 0)
 
 
 def find_object(image):
@@ -247,13 +256,13 @@ def find_object(image):
     image = cv2.medianBlur(image, 3)
 
     # Filter by color red
-    # lower_red = np.array([0, 50, 50])
-    # upper_red = np.array([5, 255, 255])
-    # image = cv2.inRange(image, lower_red, upper_red)
+    lower_red = np.array([0, 50, 50])
+    upper_red = np.array([5, 255, 255])
+    image = cv2.inRange(image, lower_red, upper_red)
 
-    lower_yellow = np.array([22, 120, 50])
-    upper_yellow = np.array([27, 255, 255])
-    image = cv2.inRange(image, lower_yellow, upper_yellow)
+    # lower_yellow = np.array([22, 120, 50])
+    # upper_yellow = np.array([27, 255, 255])
+    # image = cv2.inRange(image, lower_yellow, upper_yellow)
 
     # useley color
     # lower_blue = np.array([95, 50, 50])
