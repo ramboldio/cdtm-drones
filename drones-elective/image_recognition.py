@@ -122,12 +122,26 @@ def main():
             else:
                 vz = 0.0
 
+            speed_x = 0.0
+            speed_y = 0.0
+            speed_z = 0.0
+
             if object_center:
                 object_center_delta_z = H / 2 - object_center[1]
 
                 if abs(object_center_delta_z) > 25:
                     X_D = max(300, min(2000, drone.altitude + object_center_delta_z * 5))  # TODO: make factor 5 dependent on distance / size of entire
-                    print 'do something different:', object_center_delta_z
+                    # print 'do something different:', object_center_delta_z
+
+                speed_x = (float(object_center[0]) - float(W / 2.0)) / float(W / 2.0)
+
+                # print W, object_center[0], speed_x
+
+                x, y, w, h = object_bounding_box
+
+                speed_y = minmax(- (1.0 - float(w * h) / 50000.0) * 0.2, -0.1, 0.1)  # 0.1
+
+                print w * h, speed_y
 
             elif (current_millis() - last_hat_time) > 7000:
                 X_D = constants.DRONE_DEFAULT_ALTITUDE
@@ -137,19 +151,20 @@ def main():
 
             u = K_P * (X_D - drone.altitude) + K_D * (0 - vz) + K_I * e_int
 
-            print drone.altitude, X_D, u
+            # print drone.altitude, X_D, u
 
             if should_hold_altitude and key_up:
-                delta = X_D - drone.altitude
+                # print '>', X_D, drone.altitude, delta, speed
+                if abs(X_D - drone.altitude) > 50:
+                    delta = X_D - drone.altitude
+                    speed_z = float(delta) / float(X_D)
 
-                speed = float(delta) / float(X_D)
+                # print speed_x, speed_y, speed_z
 
-                print '>', X_D, drone.altitude, delta, speed
-
-                if abs(X_D - drone.altitude) < 50:
-                    drone.hover()
+                if any(abs(speed) > 0.1 for speed in (speed_x, speed_y, speed_z)):
+                    drone.at(at_pcmd, True, speed_x * 0.2, speed_y, speed_z, speed_x)
                 else:
-                    drone.at(at_pcmd, True, 0, 0, speed, 0)
+                    drone.hover()
 
                     # apply_z_velocity(drone, u)  # max(min(1.0, u / 1000.0), -1.0))
 
@@ -243,7 +258,6 @@ def find_object(image):
         x, y, w, h = cv2.boundingRect(biggest_contour)
 
         if w * h > 1000:
-            print w, h
             found_hat = True
             hat_bounding_box = cv2.boundingRect(biggest_contour)
             hat_center = (x + (w / 2), (y + (h / 2)))
@@ -259,6 +273,10 @@ def save_snapshot(image):
 
 def current_millis():
     return int(round(time.time() * 1000))
+
+
+def minmax(n, minn, maxn):
+    return max(min(maxn, n), minn)
 
 
 if __name__ == '__main__':
