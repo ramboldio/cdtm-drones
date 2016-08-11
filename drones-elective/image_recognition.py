@@ -10,8 +10,14 @@ import constants
 from drone_wrapper import ARDroneWrapper
 
 
+
 def main():
-    # Constants
+
+    # Init & Setup drone
+    drone = ARDroneWrapper()
+
+    drone.setup()    # Constants
+
     W, H = 640, 360
 
     K_P = 0.6
@@ -32,9 +38,7 @@ def main():
 
     e_int = 0
 
-    # Init & Setup drone
-    drone = ARDroneWrapper()
-    drone.setup()
+    camera_down_active = False
 
     try:
         while running:
@@ -78,6 +82,9 @@ def main():
                 elif very_last_pressed_key == ord('d'):  # D
                     drone.move_right()
 
+                elif very_last_pressed_key == ord('c'):  # D
+                    camera_down_active = not camera_down_active
+
                 elif very_last_pressed_key == ord('v'):  # V
                     should_hold_altitude = True
                 elif very_last_pressed_key == ord('n'):  # N
@@ -109,6 +116,9 @@ def main():
 
                 else:
                     print very_last_pressed_key
+
+            # Update Camera
+            drone.apply_active_cam(camera_down_active)
 
             # Update Altitude & Calc vz
             alt.append(drone.altitude)
@@ -161,10 +171,7 @@ def main():
 
                 # print speed_x, speed_y, speed_z
 
-                if any(abs(speed) > 0.1 for speed in (speed_x, speed_y, speed_z)):
-                    drone.at(at_pcmd, True, speed_x * 0.2, speed_y, speed_z, speed_x)
-                else:
-                    drone.hover()
+            drone.apply_velocity(speed_x, speed_y, speed_z)
 
                     # apply_z_velocity(drone, u)  # max(min(1.0, u / 1000.0), -1.0))
 
@@ -211,12 +218,6 @@ def show_on_image(image, ctrl_state, phi, psi, theta, altitude, vx, vy, vz, batt
 def show_text(image, text, pt, font=constants.FONT, font_size=constants.FONT_SIZE, color=(255, 255, 255)):
     cv2.putText(image, text, pt, font, font_size, color)
 
-
-def apply_z_velocity(drone, u):
-    if abs(u) < 30:
-        drone.hover()
-    else:
-        drone.at(at_pcmd, True, 0, 0, min(max(u / 100.0, -1.0), 1.0), 0)
 
 
 def find_object(image):

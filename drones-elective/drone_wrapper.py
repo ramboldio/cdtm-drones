@@ -1,17 +1,35 @@
-from libardrone.libardrone import ARDrone2, ARDrone
+from libardrone.libardrone import ARDrone2, ARDrone, at_pcmd
 
 import constants
 
 
 class ARDroneWrapper(ARDrone2):
+
     def __init__(self):
         ARDrone2.__init__(self, False)
-
         self.should_hold_altitude = False
+        self.camera_down_active = False
 
     def setup(self):
         self.reset()
         self.set_speed(constants.DRONE_DEFAULT_SPEED)
+
+    def apply_velocity(self, speed_x, speed_y, speed_z):
+        if any(abs(speed) > 0.1 for speed in (speed_x, speed_y, speed_z)):
+            self.at(at_pcmd, True, speed_x * 0.2, speed_y, speed_z, speed_x)
+        else:
+            self.hover()
+
+    def apply_z_velocity(self, u):
+        if abs(u) < 30:
+            self.hover()
+        else:
+            self.at(at_pcmd, True, 0, 0, min(max(u / 100.0, -1.0), 1.0), 0)
+
+    def apply_active_cam(self, cam_down_dest):
+        if not self.cam_down_active == cam_down_dest:
+            self.cam_down_active = cam_down_dest
+            self.set_camera_view(self.cam_down_active)
 
     @property
     def ctrl_state(self):
