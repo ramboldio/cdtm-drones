@@ -15,8 +15,8 @@ def main():
     # Constants
     W, H = 640, 360
 
-    K_P = 1.0
-    K_D = 0.0
+    K_P = 0.6
+    K_D = 0.6
     K_I = 0.02
 
     X_D = 1000.0
@@ -46,10 +46,6 @@ def main():
     drone.setup()
 
     try:
-        object_center_delta_width_rel_old = 0.0
-        object_center_delta_height_rel_old = 0.0
-        object_bounding_box_delta_distance_old = 0.0
-
         while running:
             drone_camera_image = drone.get_image()
 
@@ -145,12 +141,10 @@ def main():
                 center_x, center_y = object_center
 
                 object_center_delta_width = W / 2 - center_x
-                object_center_delta_width_rel = float(object_center_delta_width) / float(W / 2) # + K_D * (0 - object_center_delta_width_rel_old)
-                # object_center_delta_width_rel_old = object_center_delta_width_rel
+                object_center_delta_width_rel = float(object_center_delta_width) / float(W / 2)
 
                 object_center_delta_height = H / 2 - center_y
-                object_center_delta_height_rel = float(object_center_delta_height) / float(H / 2) # + K_D * (0 - object_center_delta_height_rel_old)
-                # object_center_delta_height_rel_old = object_center_delta_height_rel
+                object_center_delta_height_rel = float(object_center_delta_height) / float(H / 2)
 
                 if abs(object_center_delta_height) > 25:
                     X_D = max(300, min(1500, drone.altitude + object_center_delta_height * 5))  # TODO: make factor 5 dependent on distance / size of entire
@@ -162,13 +156,12 @@ def main():
                 if abs(object_center_delta_height_rel) > MAX_OFF_HEIGHT_REL:
                     speed_z = object_center_delta_height_rel  # up , down
 
-                if not speed_x and not speed_z:
-                    x, y, w, h = object_bounding_box
+                x, y, w, h = object_bounding_box
 
-                    object_bounding_box_delta_distance = float(h - H_D) / float(H_D)
+                object_bounding_box_delta_distance = float(h - H_D) / float(H_D)
 
-                    if abs(object_bounding_box_delta_distance) > 0.05:
-                        speed_y = min(1, max(-1, object_bounding_box_delta_distance))  # back, forth
+                if abs(object_bounding_box_delta_distance) > 0.1:
+                    speed_y = min(1, max(-1, object_bounding_box_delta_distance))  # back, forth
 
             elif (current_millis() - last_hat_time) > 7000:
                 X_D = constants.DRONE_DEFAULT_ALTITUDE
@@ -179,8 +172,8 @@ def main():
             u = K_P * (X_D - drone.altitude) + K_D * (0 - vz) + K_I * e_int
 
             if object_center and should_hold_altitude and key_up:
-                speed_x *= 0.2 * 1.0  # 0.5
-                speed_y *= 0.1 * 0.0  # 0.1
+                speed_x *= 0.1 * 1.0  # 0.5
+                speed_y *= 0.1 * 1.0  # 0.1
                 speed_z *= 0.2 * 1.0  # 0.3
 
                 speed_x = minmax(speed_x, -0.5, 0.5)
@@ -193,9 +186,9 @@ def main():
                 #     turn_right = 0.0
 
                 if any(speed != 0 for speed in (speed_x, speed_y, speed_z)):
-                    print speed_x, speed_y, speed_z, 0
+                    print speed_x, speed_y, speed_z, 0  # - speed_x * 0.1
 
-                    drone.at(at_pcmd, True, speed_x, speed_y, speed_z, 0)  # -0.05 * speed_x)
+                    drone.at(at_pcmd, True, speed_x, speed_y, speed_z, 0)  # - speed_x * 0.025)
                 else:
                     print 'hover'
                     drone.hover()
@@ -271,9 +264,11 @@ def find_object(image):
     image = cv2.medianBlur(image, 3)
 
     # Filter by color red
-    lower_red = np.array([0, 50, 50])
-    upper_red = np.array([5, 255, 255])
-    image = cv2.inRange(image, lower_red, upper_red)
+    lower_red_1 = np.array([170, 10, 10])
+    upper_red_1 = np.array([179, 255, 255])
+    lower_red_2 = np.array([0, 10, 10])
+    upper_red_2 = np.array([10, 255, 255])
+    image = cv2.inRange(image, lower_red_1, upper_red_1)
 
     # lower_yellow = np.array([22, 120, 50])
     # upper_yellow = np.array([27, 255, 255])
