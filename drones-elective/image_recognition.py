@@ -142,8 +142,6 @@ def main():
 
             speed_turn_right = 0.0
 
-            get_obj_color_bound(drone_camera_image, (W / 2, H / 2))
-
             if object_center:
                 center_x, center_y = object_center
 
@@ -260,16 +258,18 @@ def show_text(image, text, pt, font=constants.FONT, font_size=constants.FONT_SIZ
 #         drone.at(at_pcmd, True, 0, 0, min(max(u / 100.0, -1.0), 1.0), 0)
 
 def get_obj_color_bound(image, center_point):
-    patch = cv2.getRectSubPix(image, (15, 15), center_point)
+    patch = cv2.getRectSubPix(image, (10, 10), center_point)
     patch = cv2.cvtColor(patch, cv2.COLOR_RGB2HSV)
-    values = serialize_2d_array(patch)
-    target_h = get_h_average(values)
-    var = get_standard_deviation(values, target_h)
-    print target_h, var
-    lower = target_h - 10
-    if target_h - 10 < 0:
-        lower = 0
-    return lower, target_h+10
+    patch = cv2.GaussianBlur(patch, (5, 5), 2)
+    target_h = patch[7][7][0]
+    """"values = serialize_2d_array(patch)
+    if target_h > 30 and target_h < 150:
+        avg = get_h_average(values)
+    else:
+        avg = get_h_average(values, True)
+    var = get_standard_deviation(values, avg)"""""
+    print target_h
+    return target_h - 5, target_h+5
 
 
 def serialize_2d_array(array):
@@ -305,7 +305,7 @@ def color_mask(image, color_bound, min_s, min_v):
         upper_red_1 = np.array([max_h, 255, 255])
         return cv2.inRange(image, lower_red_1, upper_red_1)
     else:
-        lower_red_1 = np.array([min_h, min_s, min_v])
+        lower_red_1 = np.array([(min_h % 180), min_s, min_v])
         upper_red_1 = np.array([179, 255, 255])
         lower_red_2 = np.array([0, min_s, min_v])
         upper_red_2 = np.array([(max_h % 180), 255, 255])
@@ -331,9 +331,9 @@ def find_object(image, obj_h_bound=None):
 
     # Filter by color red
     if obj_h_bound:
-        image = color_mask(image, obj_h_bound, 10, 10)
+        image = color_mask(image, obj_h_bound, 30, 30)
     else:
-        image = color_mask(image, (170, 190), 10, 10)
+        image = color_mask(image, (170, 180), 10, 10)
 
     # lower_yellow = np.array([22, 120, 50])
     # upper_yellow = np.array([27, 255, 255])
