@@ -14,6 +14,7 @@ from drone_wrapper import ARDroneWrapper
 def main():
     # Constants
     W, H = 640, 360
+    global_center = (W/2, H/2)
 
     K_P = 0.6
     K_D = 0.6
@@ -41,6 +42,8 @@ def main():
 
     e_int = 0
 
+    calibrated_h_bound = None
+
     # Init & Setup drone
     drone = ARDroneWrapper()
     drone.setup()
@@ -51,8 +54,9 @@ def main():
 
             drone_camera_image_as_rgb = cv2.cvtColor(drone_camera_image.copy(), cv2.COLOR_BGR2RGB)
 
-            # Find object in camera view
-            found_object, object_bounding_box, object_center = find_object(drone_camera_image.copy())
+            # TODO: DO IN OWN CLASS
+            # Find hat in camera view
+            found_object, object_bounding_box, object_center = find_object(drone_camera_image.copy(), calibrated_h_bound)
             if found_object:
                 last_hat_time = current_millis()
 
@@ -83,6 +87,8 @@ def main():
                     drone.move_backward()
                 elif very_last_pressed_key == ord('a'):  # A
                     drone.move_left()
+                elif very_last_pressed_key == ord('c'):  # C
+                    calibrated_h_bound = get_obj_color_bound(drone_camera_image, global_center)
                 elif very_last_pressed_key == ord('d'):  # D
                     drone.move_right()
 
@@ -259,8 +265,65 @@ def show_text(image, text, pt, font=constants.FONT, font_size=constants.FONT_SIZ
 #     else:
 #         drone.at(at_pcmd, True, 0, 0, min(max(u / 100.0, -1.0), 1.0), 0)
 
+def get_obj_color_bound(image, center_point):
+    patch = cv2.getRectSubPix(image, (10, 10), center_point)
+    patch = cv2.cvtColor(patch, cv2.COLOR_RGB2HSV)
+    patch = cv2.GaussianBlur(patch, (5, 5), 2)
+    target_h = patch[7][7][0]
+    """"values = serialize_2d_array(patch)
+    if target_h > 30 and target_h < 150:
+        avg = get_h_average(values)
+    else:
+        avg = get_h_average(values, True)
+    var = get_standard_deviation(values, avg)"""""
+    print target_h
+    return target_h - 5, target_h+5
 
-def find_object(image):
+
+def serialize_2d_array(array):
+    res = []
+    for line in array:
+        for x in line:
+            res.append(x)
+    return res
+
+
+def get_h_average(pixel_array, over_180=False):
+    sum = 0
+    for px in pixel_array:
+        val = px[0]
+        if val < 90 and over_180:
+            sum += val + 180
+        else:
+            sum += val
+    return float(sum) / float(len(pixel_array))
+
+
+def get_standard_deviation(array, avg):
+    sum = 0
+    for x in array:
+        sum += pow(x[0] - avg, 2)
+    return sum / len(array)
+
+
+def color_mask(image, color_bound, min_s, min_v):
+    min_h, max_h = color_bound
+    if (max_h - 180) <= 0:
+        lower_red_1 = np.array([min_h, min_s, min_v])
+        upper_red_1 = np.array([max_h, 255, 255])
+        return cv2.inRange(image, lower_red_1, upper_red_1)
+    else:
+        lower_red_1 = np.array([(min_h % 180), min_s, min_v])
+        upper_red_1 = np.array([179, 255, 255])
+        lower_red_2 = np.array([0, min_s, min_v])
+        upper_red_2 = np.array([(max_h % 180), 255, 255])
+        range1 = cv2.inRange(image, lower_red_1, upper_red_1)
+        range2 = cv2.inRange(image, lower_red_2, upper_red_2)
+        res = cv2.addWeighted(range1, 1, range2, 1, 0.0)
+        return res
+
+
+def find_object(image, obj_h_bound=None):
     found_hat = False
     hat_bounding_box = None
     hat_center = None
@@ -271,15 +334,10 @@ def find_object(image):
     image = cv2.medianBlur(image, 3)
 
     # Filter by color red
-    lower_red_1 = np.array([0, 50, 50])
-    upper_red_1 = np.array([10, 255, 255])
-    mask1 = cv2.inRange(image, lower_red_1, upper_red_1)
-
-    lower_red_2 = np.array([0, 50, 50])
-    upper_red_2 = np.array([10, 255, 255])
-    mask2 = cv2.inRange(image, lower_red_2, upper_red_2)
-
-    image = cv2.addWeighted(mask1, 1.0, mask2, 1.0, 0.0)
+    if obj_h_bound:
+        image = color_mask(image, obj_h_bound, 30, 30)
+    else:
+        image = color_mask(image, (170, 190), 10, 10)
 
     # lower_yellow = np.array([22, 120, 50])
     # upper_yellow = np.array([27, 255, 255])

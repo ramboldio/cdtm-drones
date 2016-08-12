@@ -12,6 +12,7 @@ class ARDroneWrapper(ARDrone2):
     def setup(self):
         self.reset()
         self.set_speed(constants.DRONE_DEFAULT_SPEED)
+        self.set_camera_view(True)
 
     @property
     def ctrl_state(self):
