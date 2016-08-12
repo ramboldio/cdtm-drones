@@ -21,13 +21,13 @@ def main():
 
     X_D = 1000.0
 
-    W_D = 320
-    H_D = 220
+    W_D = 350  # 320
+    H_D = 240  # 220
 
     MAX_OFF_WIDTH_REL = 0.10
     MAX_OFF_HEIGHT_REL = 0.10
 
-    speex_x_turn_factor = 0.2
+    speed_x_turn_factor = 0.2
 
     running = True
     should_hold_altitude = False
@@ -51,8 +51,7 @@ def main():
 
             drone_camera_image_as_rgb = cv2.cvtColor(drone_camera_image.copy(), cv2.COLOR_BGR2RGB)
 
-            # TODO: DO IN OWN CLASS
-            # Find hat in camera view
+            # Find object in camera view
             found_object, object_bounding_box, object_center = find_object(drone_camera_image.copy())
             if found_object:
                 last_hat_time = current_millis()
@@ -160,7 +159,15 @@ def main():
 
                 object_bounding_box_delta_distance = float(h - H_D) / float(H_D)
 
-                if abs(object_bounding_box_delta_distance) > 0.1:
+                perc_filled = float(w) / float(W) * float(h) / float(H)
+
+                print w * h, W * H, perc_filled
+
+                if perc_filled > 0.5:
+                    speed_y = 1.0
+                elif perc_filled < 0.2:
+                    speed_y = -1.0
+                elif abs(object_bounding_box_delta_distance) > 0.05:
                     speed_y = min(1, max(-1, object_bounding_box_delta_distance))  # back, forth
 
             elif (current_millis() - last_hat_time) > 7000:
@@ -173,7 +180,7 @@ def main():
 
             if object_center and should_hold_altitude and key_up:
                 speed_x *= 0.1 * 1.0  # 0.5
-                speed_y *= 0.1 * 1.0  # 0.1
+                speed_y *= 0.05 * 1.0  # 0.1
                 speed_z *= 0.2 * 1.0  # 0.3
 
                 speed_x = minmax(speed_x, -0.5, 0.5)
@@ -264,11 +271,15 @@ def find_object(image):
     image = cv2.medianBlur(image, 3)
 
     # Filter by color red
-    lower_red_1 = np.array([170, 10, 10])
-    upper_red_1 = np.array([179, 255, 255])
-    lower_red_2 = np.array([0, 10, 10])
+    lower_red_1 = np.array([0, 50, 50])
+    upper_red_1 = np.array([10, 255, 255])
+    mask1 = cv2.inRange(image, lower_red_1, upper_red_1)
+
+    lower_red_2 = np.array([0, 50, 50])
     upper_red_2 = np.array([10, 255, 255])
-    image = cv2.inRange(image, lower_red_1, upper_red_1)
+    mask2 = cv2.inRange(image, lower_red_2, upper_red_2)
+
+    image = cv2.addWeighted(mask1, 1.0, mask2, 1.0, 0.0)
 
     # lower_yellow = np.array([22, 120, 50])
     # upper_yellow = np.array([27, 255, 255])
@@ -306,7 +317,7 @@ def find_object(image):
     if biggest_contour is not None:
         x, y, w, h = cv2.boundingRect(biggest_contour)
 
-        if w * h > 100:
+        if w * h > 300:
             found_hat = True
             hat_bounding_box = cv2.boundingRect(biggest_contour)
             hat_center = (x + (w / 2), (y + (h / 2)))
