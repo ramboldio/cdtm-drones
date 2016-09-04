@@ -1,7 +1,7 @@
 # Contributors
 
 * Lukas Rambold
-* Pascal Fritzen
+* Pascal Fritzen 
 
 # Repo Structure
 
