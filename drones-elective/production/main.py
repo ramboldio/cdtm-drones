@@ -54,8 +54,7 @@ def main():
 
             drone_camera_image_as_rgb = cv2.cvtColor(drone_camera_image.copy(), cv2.COLOR_BGR2RGB)
 
-            # TODO: DO IN OWN CLASS
-            # Find hat in camera view
+            # Find object in camera view
             found_object, object_bounding_box, object_center = find_object(drone_camera_image.copy(), calibrated_h_bound)
             if found_object:
                 last_hat_time = current_millis()
@@ -87,10 +86,11 @@ def main():
                     drone.move_backward()
                 elif very_last_pressed_key == ord('a'):  # A
                     drone.move_left()
-                elif very_last_pressed_key == ord('c'):  # C
-                    calibrated_h_bound = get_obj_color_bound(drone_camera_image, global_center)
                 elif very_last_pressed_key == ord('d'):  # D
                     drone.move_right()
+
+                elif very_last_pressed_key == ord('c'):  # C
+                    calibrated_h_bound = get_obj_color_bound(drone_camera_image, global_center)
 
                 elif very_last_pressed_key == ord('v'):  # V
                     should_hold_altitude = True
@@ -193,11 +193,6 @@ def main():
                 speed_y = minmax(speed_y, -0.5, 0.5)
                 speed_z = minmax(speed_z, -0.5, 0.5)
 
-                # if abs(speed_x) > 0.05:
-                #     turn_right = math.copysign(0.1, speed_x)
-                # else:
-                #     turn_right = 0.0
-
                 if any(speed != 0 for speed in (speed_x, speed_y, speed_z)):
                     print speed_x, speed_y, speed_z, 0  # - speed_x * 0.1
 
@@ -258,13 +253,6 @@ def show_text(image, text, pt, font=constants.FONT, font_size=constants.FONT_SIZ
     cv2.putText(image, text, pt, font, font_size, color)
 
 
-#
-# def apply_z_velocity(drone, u):
-#     if abs(u) < 30:
-#         drone.hover()
-#     else:
-#         drone.at(at_pcmd, True, 0, 0, min(max(u / 100.0, -1.0), 1.0), 0)
-
 def get_obj_color_bound(image, center_point):
     patch = cv2.getRectSubPix(image, (10, 10), center_point)
     patch = cv2.cvtColor(patch, cv2.COLOR_RGB2HSV)
@@ -324,9 +312,9 @@ def color_mask(image, color_bound, min_s, min_v):
 
 
 def find_object(image, obj_h_bound=None):
-    found_hat = False
-    hat_bounding_box = None
-    hat_center = None
+    found_object = False
+    object_bounding_box = None
+    object_center = None
 
     # Convert to HSV in order to filter by color
     image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
@@ -339,22 +327,6 @@ def find_object(image, obj_h_bound=None):
     else:
         image = color_mask(image, (170, 190), 10, 10)
 
-    # lower_yellow = np.array([22, 120, 50])
-    # upper_yellow = np.array([27, 255, 255])
-    # image = cv2.inRange(image, lower_yellow, upper_yellow)
-
-    # useley color
-    # lower_blue = np.array([95, 50, 50])
-    # upper_blue = np.array([100, 255, 255])
-    # image = cv2.inRange(image, lower_blue, upper_blue)
-
-    # Academy of Consult Journal
-    # lower_bound = np.array([165, 50, 50])
-    # upper_bound = np.array([170, 255, 255])
-    # image = cv2.inRange(image, lower_bound, upper_bound)
-
-    # Put on median blur to reduce noise
-    # image = cv2.GaussianBlur(image, (15, 15), 2)
     image = cv2.medianBlur(image, 11)
 
     # Find contours and decide if hat is one of them
@@ -376,17 +348,17 @@ def find_object(image, obj_h_bound=None):
         x, y, w, h = cv2.boundingRect(biggest_contour)
 
         if w * h > 300:
-            found_hat = True
-            hat_bounding_box = cv2.boundingRect(biggest_contour)
-            hat_center = (x + (w / 2), (y + (h / 2)))
+            found_object = True
+            object_bounding_box = cv2.boundingRect(biggest_contour)
+            object_center = (x + (w / 2), (y + (h / 2)))
 
     cv2.imshow("masked", image)
 
-    return found_hat, hat_bounding_box, hat_center
+    return found_object, object_bounding_box, object_center
 
 
 def save_snapshot(image):
-    cv2.imwrite('tmp/DroneView.jpg', image)
+    cv2.imwrite('drone_snapshots/DroneView.jpg', image)
 
 
 def current_millis():
